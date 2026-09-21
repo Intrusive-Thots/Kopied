@@ -1,0 +1,24 @@
+# Kopied - .gitignore
+# User data (never commit personal clipboard contents)
+Clipboard/
+Screenshots/
+index/
+clipboard_history.csv
+*.log
+*.lock
+stdout.txt
+stderr.txt
+kopied_history_restored.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
