@@ -16,8 +16,8 @@
 - **🔍 Content-level dedup** — SHA-256 hashing ensures no duplicate content is ever stored
 - **🌐 Web GUI viewer** — Browse, search, copy, and manage all your clipboard history at `http://127.0.0.1:8765`
 - **⚡ Near-zero idle load** — Event-driven clipboard listener, no busy loops
-- **🔄 Auto-start** — Both services start silently at Windows logon
-- **💾 Crash recovery** — Self-healing restart loops keep services running
+- **🔄 Auto-start** — The clipboard engine runs as a per-user Scheduled Task at logon (`pythonw`, no console)
+- **💾 Crash recovery** — The task restarts the engine on failure (up to 999 times, 1 minute apart) and re-checks every 10 minutes if it is not running
 
 ## 📦 Quick Install
 
@@ -30,13 +30,19 @@ install.bat
 The installer will:
 1. Copy files to `C:\Kopied\`
 2. Install Python dependencies (`pywin32`, `Pillow`)
-3. Create Startup shortcuts (auto-start at logon)
-4. Create a Desktop shortcut for the viewer
-5. Start both services and open the GUI
+3. Register the per-user `Kopied` Scheduled Task (engine auto-start at logon)
+4. Create a Desktop shortcut (`Kopied.lnk`) for the viewer, with `assets\kopied.ico`
+5. Start the engine and open the GUI
+
+If you already have Kopied at `C:\Kopied` and only need to refresh startup and the shortcut:
+
+```bat
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Kopied\bin\install_scheduled_task.ps1
+```
 
 ## 🖥️ GUI Viewer
 
-Open **[http://127.0.0.1:8765](http://127.0.0.1:8765)** or double-click the **Kopied Viewer** Desktop shortcut.
+Open **[http://127.0.0.1:8765](http://127.0.0.1:8765)** or double-click the **Kopied** Desktop shortcut.
 
 - **Filter** by text, images, or screenshots
 - **Search** across all content, filenames, and dates
@@ -50,15 +56,20 @@ Open **[http://127.0.0.1:8765](http://127.0.0.1:8765)** or double-click the **Ko
 ```
 C:\Kopied\
 ├── bin\
-│   ├── kopied.py              # Clipboard service (v2.0)
-│   ├── kopied_gui.py          # GUI web server (port 8765)
-│   ├── launch_kopied.vbs      # Silent launcher with restart loop
-│   ├── launch_gui_silent.vbs  # GUI launcher with restart loop
-│   ├── install_startup.vbs    # Register at Windows logon
-│   ├── stop_kopied.bat        # Stop all services
-│   └── verify_kopied.py       # Health check
+│   ├── kopied.py                    # Clipboard service (v2.1)
+│   ├── kopied_gui.py                # GUI web server (port 8765)
+│   ├── install_scheduled_task.ps1   # Register logon task + Desktop shortcut
+│   ├── launch_kopied.vbs            # Optional silent launcher with restart loop
+│   ├── launch_gui_silent.vbs        # Optional GUI launcher with restart loop
+│   ├── install_startup.vbs          # Legacy Startup-folder registration
+│   ├── stop_kopied.bat              # Stop all services
+│   └── verify_kopied.py             # Health check
+├── assets\
+│   ├── kopied.ico                   # Multi-size app icon (16–256)
+│   ├── kopied-icon-preview.png      # 256px PNG preview
+│   └── make_icon.py                 # Regenerates the icon (needs Pillow)
 ├── gui\
-│   └── index.html             # Web UI (single-page app)
+│   └── index.html                   # Web UI (single-page app)
 ├── Clipboard\
 │   ├── Text\                  # Saved text files
 │   └── Images\                # Saved image files
@@ -78,8 +89,13 @@ C:\Kopied\
 ## ⌨️ Commands
 
 ```bat
-:: Start (silent, auto-restarts on crash)
-wscript C:\Kopied\bin\launch_kopied.vbs
+:: Register / refresh the logon task and Desktop shortcut
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Kopied\bin\install_scheduled_task.ps1
+
+:: Start the engine now (after the task is registered)
+schtasks /Run /TN Kopied
+
+:: Optional: start the GUI viewer server (silent, auto-restarts on crash)
 wscript C:\Kopied\bin\launch_gui_silent.vbs
 
 :: Debug (console output)
@@ -102,6 +118,25 @@ C:\Kopied\bin\stop_kopied.bat
 ```bat
 py -3 -m pip install pywin32 Pillow
 ```
+
+
+## 🚀 Install / startup (Windows)
+
+The clipboard engine should stay running in the background after you log on. Use a **per-user Scheduled Task** (no admin). Do not also put a Startup-folder shortcut to the engine — that would be a duplicate starter. The engine already refuses a second instance via `kopied.lock` and a global mutex.
+
+1. Keep the app at `C:\Kopied` (adjust paths in `bin\install_scheduled_task.ps1` if you install elsewhere).
+2. Dependencies: `py -3 -m pip install pywin32 Pillow`
+3. Register or refresh the task and the desktop GUI shortcut:
+
+   ```bat
+   powershell -NoProfile -ExecutionPolicy Bypass -File C:\Kopied\bin\install_scheduled_task.ps1
+   ```
+
+   The `Kopied` task starts `pythonw.exe` on `bin\kopied.py` at logon (15s delay), restarts on failure up to 999 times one minute apart, has no execution time limit, and runs on battery. A 10-minute repetition trigger starts it again only if it is not already running (`MultipleInstances: IgnoreNew`).
+
+4. The desktop shortcut `Kopied.lnk` opens the web GUI with `pythonw` (no console window) and uses `assets\kopied.ico`. Regenerate the icon with `py -3 C:\Kopied\assets\make_icon.py` if you edit it.
+
+5. Optional: a Startup-folder `Kopied GUI.lnk` can keep the archive viewer server (`bin\kopied_gui.py --no-browser`) listening at logon. That is separate from the engine task.
 
 ## 🗑️ Uninstall
 
